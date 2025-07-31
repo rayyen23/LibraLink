@@ -1,0 +1,719 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LibraLink - Library Management System</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: #f4f6f9;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: linear-gradient(90deg, #2c3e50, #3498db);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+
+        .login-section, .dashboard {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: #3498db;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .tab:hover {
+            background: #2980b9;
+        }
+
+        .tab.active {
+            background: #2c3e50;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+
+        .form-group input, .form-group select {
+            width: 100%;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+
+        .btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-right: 10px;
+        }
+
+        .btn-primary {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #2980b9;
+        }
+
+        .btn-secondary {
+            background: #7f8c8d;
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            background: #6c7a89;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+
+        th {
+            background: #3498db;
+            color: white;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            width: 500px;
+        }
+
+        .modal-content h2 {
+            margin-bottom: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>LibraLink - Library Management System</h1>
+        </div>
+
+        <div class="login-section" id="loginSection">
+            <h2>Login</h2>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="username" placeholder="Enter username">
+            </div>
+            <div class="form-group">
+                <label>Password</label>
+                <input type="password" id="password" placeholder="Enter password">
+            </div>
+            <div class="form-group">
+                <label>User Type</label>
+                <select id="userType">
+                    <option value="admin">Admin</option>
+                    <option value="student">Student</option>
+                    <option value="management">Management</option>
+                </select>
+            </div>
+            <button class="btn btn-primary" onclick="login()">Login</button>
+        </div>
+
+        <div class="dashboard" id="dashboard" style="display: none;">
+            <div class="tabs" id="tabs"></div>
+            <div id="content"></div>
+        </div>
+    </div>
+
+    <div class="modal" id="modal">
+        <div class="modal-content">
+            <h2 id="modalTitle"></h2>
+            <div id="modalContent"></div>
+            <div>
+                <button class="btn btn-primary" id="modalSubmit"></button>
+                <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzaidX91XQWO3AD1p2tU7zaZ-ff4JCaeHKXgOM7sXtLvfyZz9xeGe8wWMnUgVxO6VO9IA/exec'; // Replace with deployed Apps Script URL
+
+        let currentUserType = null;
+
+        function login() {
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            currentUserType = document.getElementById('userType').value;
+
+            // Simple client-side validation (in production, use proper authentication)
+            if (username && password) {
+                document.getElementById('loginSection').style.display = 'none';
+                document.getElementById('dashboard').style.display = 'block';
+                renderDashboard();
+            } else {
+                alert('Please fill in all fields');
+            }
+        }
+
+        function renderDashboard() {
+            const tabs = document.getElementById('tabs');
+            const content = document.getElementById('content');
+            tabs.innerHTML = '';
+            content.innerHTML = '';
+
+            if (currentUserType === 'admin') {
+                renderAdminTabs();
+            } else if (currentUserType === 'student') {
+                renderStudentTabs();
+            } else {
+                renderManagementTabs();
+            }
+        }
+
+        function renderAdminTabs() {
+            const tabs = ['Manage Books', 'Approve Bookings', 'Generate Reports'];
+            const tabsContainer = document.getElementById('tabs');
+            tabs.forEach(tab => {
+                const tabEl = document.createElement('div');
+                tabEl.className = 'tab';
+                tabEl.textContent = tab;
+                tabEl.onclick = () => {
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    tabEl.classList.add('active');
+                    renderContent(tab);
+                };
+                tabsContainer.appendChild(tabEl);
+            });
+            tabsContainer.firstChild.classList.add('active');
+            renderContent('Manage Books');
+        }
+
+        function renderStudentTabs() {
+            const tabs = ['Browse Books', 'My Bookings', 'New Books'];
+            const tabsContainer = document.getElementById('tabs');
+            tabs.forEach(tab => {
+                const tabEl = document.createElement('div');
+                tabEl.className = 'tab';
+                tabEl.textContent = tab;
+                tabEl.onclick = () => {
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    tabEl.classList.add('active');
+                    renderContent(tab);
+                };
+                tabsContainer.appendChild(tabEl);
+            });
+            tabsContainer.firstChild.classList.add('active');
+            renderContent('Browse Books');
+        }
+
+        function renderManagementTabs() {
+            const tabs = ['Book Loans Report', 'User Statistics'];
+            const tabsContainer = document.getElementById('tabs');
+            tabs.forEach(tab => {
+                const tabEl = document.createElement('div');
+                tabEl.className = 'tab';
+                tabEl.textContent = tab;
+                tabEl.onclick = () => {
+                    document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+                    tabEl.classList.add('active');
+                    renderContent(tab);
+                };
+                tabsContainer.appendChild(tabEl);
+            });
+            tabsContainer.firstChild.classList.add('active');
+            renderContent('Book Loans Report');
+        }
+
+        function renderContent(tab) {
+            const content = document.getElementById('content');
+            content.innerHTML = '';
+
+            if (tab === 'Manage Books') {
+                content.innerHTML = `
+                    <h2>Manage Books</h2>
+                    <button class="btn btn-primary" onclick="openAddBookModal()">Add Book</button>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Bil</th>
+                                <th>Nama Buku</th>
+                                <th>Nama Penulis</th>
+                                <th>Tajuk Buku</th>
+                                <th>Tahun Diterbitkan</th>
+                                <th>Available</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="booksTable"></tbody>
+                    </table>
+                `;
+                fetchBooks();
+            } else if (tab === 'Approve Bookings') {
+                content.innerHTML = `
+                    <h2>Approve Bookings</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Bil</th>
+                                <th>No Matrik</th>
+                                <th>Tarikh Pinjam</th>
+                                <th>Tarikh Pulang</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bookingsTable"></tbody>
+                    </table>
+                `;
+                fetchBookings();
+            } else if (tab === 'Generate Reports') {
+                content.innerHTML = `
+                    <h2>Generate Reports</h2>
+                    <button class="btn btn-primary" onclick="printReport('books')">Print Book Report</button>
+                    <button class="btn btn-primary" onclick="printReport('bookings')">Print Booking Report</button>
+                `;
+            } else if (tab === 'Browse Books') {
+                content.innerHTML = `
+                    <h2>Browse Books</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Bil</th>
+                                <th>Nama Buku</th>
+                                <th>Nama Penulis</th>
+                                <th>Tajuk Buku</th>
+                                <th>Tahun Diterbitkan</th>
+                                <th>Available</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="booksTable"></tbody>
+                    </table>
+                `;
+                fetchBooks();
+            } else if (tab === 'My Bookings') {
+                content.innerHTML = `
+                    <h2>My Bookings</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Bil</th>
+                                <th>No Matrik</th>
+                                <th>Tarikh Pinjam</th>
+                                <th>Tarikh Pulang</th>
+                            </tr>
+                        </thead>
+                        <tbody id="myBookingsTable"></tbody>
+                    </table>
+                `;
+                fetchMyBookings();
+            } else if (tab === 'New Books') {
+                content.innerHTML = `
+                    <h2>New Books</h2>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Bil</th>
+                                <th>Nama Buku</th>
+                                <th>Nama Penulis</th>
+                                <th>Tajuk Buku</th>
+                                <th>Tahun Diterbitkan</th>
+                            </tr>
+                        </thead>
+                        <tbody id="newBooksTable"></tbody>
+                    </table>
+                `;
+                fetchNewBooks();
+            } else if (tab === 'Book Loans Report' || tab === 'User Statistics') {
+                content.innerHTML = `
+                    <h2>${tab}</h2>
+                    <button class="btn btn-primary" onclick="printReport('${tab.toLowerCase().replace(' ', '_')}')">Print Report</button>
+                    <table>
+                        <thead id="reportTableHead"></thead>
+                        <tbody id="reportTableBody"></tbody>
+                    </table>
+                `;
+                fetchReport(tab);
+            }
+        }
+
+        function openAddBookModal() {
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalContent = document.getElementById('modalContent');
+            const modalSubmit = document.getElementById('modalSubmit');
+
+            modalTitle.textContent = 'Add New Book';
+            modalContent.innerHTML = `
+                <div class="form-group">
+                    <label>Nama Buku</label>
+                    <input type="text" id="bookName">
+                </div>
+                <div class="form-group">
+                    <label>Nama Penulis</label>
+                    <input type="text" id="authorName">
+                </div>
+                <div class="form-group">
+                    <label>Tajuk Buku</label>
+                    <input type="text" id="bookTitle">
+                </div>
+                <div class="form-group">
+                    <label>Tahun Diterbitkan</label>
+                    <input type="number" id="publishYear">
+                </div>
+            `;
+            modalSubmit.textContent = 'Add Book';
+            modalSubmit.onclick = addBook;
+            modal.style.display = 'flex';
+        }
+
+        function openEditBookModal(book) {
+            const modal = document.getElementById('modal');
+            const modalTitle = document.getElementById('modalTitle');
+            const modalContent = document.getElementById('modalContent');
+            const modalSubmit = document.getElementById('modalSubmit');
+
+            modalTitle.textContent = 'Edit Book';
+            modalContent.innerHTML = `
+                <div class="form-group">
+                    <label>Bil</label>
+                    <input type="text" id="bookBil" value="${book.bil}" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Nama Buku</label>
+                    <input type="text" id="bookName" value="${book.nama_buku}">
+                </div>
+                <div class="form-group">
+                    <label>Nama Penulis</label>
+                    <input type="text" id="authorName" value="${book.nama_penulis}">
+                </div>
+                <div class="form-group">
+                    <label>Tajuk Buku</label>
+                    <input type="text" id="bookTitle" value="${book.tajuk_buku}">
+                </div>
+                <div class="form-group">
+                    <label>Tahun Diterbitkan</label>
+                    <input type="number" id="publishYear" value="${book.tahun_diterbitkan}">
+                </div>
+            `;
+            modalSubmit.textContent = 'Update Book';
+            modalSubmit.onclick = () => updateBook(book.bil);
+            modal.style.display = 'flex';
+        }
+
+        function closeModal() {
+            document.getElementById('modal').style.display = 'none';
+        }
+
+        async function fetchBooks() {
+            const response = await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'getBooks' })
+            });
+            const books = JSON.parse(await response.text());
+            const tableBody = document.getElementById('booksTable');
+            tableBody.innerHTML = '';
+            books.forEach(book => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${book.bil}</td>
+                    <td>${book.nama_buku}</td>
+                    <td>${book.nama_penulis}</td>
+                    <td>${book.tajuk_buku}</td>
+                    <td>${book.tahun_diterbitkan}</td>
+                    <td>${book.available ? 'Yes' : 'No'}</td>
+                    <td>
+                        ${currentUserType === 'admin' ? 
+                            `<button class="btn btn-primary" onclick='openEditBookModal(${JSON.stringify(book)})'>Edit</button>
+                             <button class="btn btn-primary" onclick="updateAvailability(${book.bil}, ${!book.available})">Toggle Availability</button>` :
+                            `<button class="btn btn-primary" onclick="bookNow(${book.bil})">Book</button>`}
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        async function fetchBookings() {
+            const response = await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'getBookings' })
+            });
+            const bookings = JSON.parse(await response.text());
+            const tableBody = document.getElementById('bookingsTable');
+            tableBody.innerHTML = '';
+            bookings.forEach(booking => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${booking.bil}</td>
+                    <td>${booking.no_matrik}</td>
+                    <td>${booking.tarikh_pinjam}</td>
+                    <td>${booking.tarikh_pulang}</td>
+                    <td>
+                        <button class="btn btn-primary" onclick="approveBooking(${booking.bil})">Approve</button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        async function fetchMyBookings() {
+            const response = await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'getMyBookings', no_matrik: document.getElementById('username').value })
+            });
+            const bookings = JSON.parse(await response.text());
+            const tableBody = document.getElementById('myBookingsTable');
+            tableBody.innerHTML = '';
+            bookings.forEach(booking => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${booking.bil}</td>
+                    <td>${booking.no_matrik}</td>
+                    <td>${booking.tarikh_pinjam}</td>
+                    <td>${booking.tarikh_pulang}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        async function fetchNewBooks() {
+            const response = await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'getNewBooks' })
+            });
+            const books = JSON.parse(await response.text());
+            const tableBody = document.getElementById('newBooksTable');
+            tableBody.innerHTML = '';
+            books.forEach(book => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td>${book.bil}</td>
+                    <td>${book.nama_buku}</td>
+                    <td>${book.nama_penulis}</td>
+                    <td>${book.tajuk_buku}</td>
+                    <td>${book.tahun_diterbitkan}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        async function fetchReport(type) {
+            const response = await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'getReport', type })
+            });
+            const data = JSON.parse(await response.text());
+            const tableHead = document.getElementById('reportTableHead');
+            const tableBody = document.getElementById('reportTableBody');
+            tableHead.innerHTML = '';
+            tableBody.innerHTML = '';
+
+            if (type === 'Book Loans Report') {
+                tableHead.innerHTML = `
+                    <tr>
+                        <th>Bil</th>
+                        <th>No Matrik</th>
+                        <th>Tarikh Pinjam</th>
+                        <th>Tarikh Pulang</th>
+                    </tr>
+                `;
+                data.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.bil}</td>
+                        <td>${item.no_matrik}</td>
+                        <td>${item.tarikh_pinjam}</td>
+                        <td>${item.tarikh_pulang}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            } else {
+                tableHead.innerHTML = `
+                    <tr>
+                        <th>Bil</th>
+                        <th>Nama Pelajar</th>
+                        <th>No Matrik</th>
+                        <th>Kelas</th>
+                        <th>Total Books Borrowed</th>
+                    </tr>
+                `;
+                data.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${item.bil}</td>
+                        <td>${item.nama_pelajar}</td>
+                        <td>${item.no_matrik}</td>
+                        <td>${item.kelas}</td>
+                        <td>${item.total_borrowed}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            }
+        }
+
+        async function addBook() {
+            const book = {
+                nama_buku: document.getElementById('bookName').value,
+                nama_penulis: document.getElementById('authorName').value,
+                tajuk_buku: document.getElementById('bookTitle').value,
+                tahun_diterbitkan: document.getElementById('publishYear').value
+            };
+            await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'addBook', book })
+            });
+            closeModal();
+            fetchBooks();
+        }
+
+        async function updateBook(bil) {
+            const book = {
+                bil,
+                nama_buku: document.getElementById('bookName').value,
+                nama_penulis: document.getElementById('authorName').value,
+                tajuk_buku: document.getElementById('bookTitle').value,
+                tahun_diterbitkan: document.getElementById('publishYear').value
+            };
+            await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'updateBook', book })
+            });
+            closeModal();
+            fetchBooks();
+        }
+
+        async function updateAvailability(bil, available) {
+            await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'updateAvailability', bil, available })
+            });
+            fetchBooks();
+        }
+
+        async function bookNow(bil) {
+            const no_matrik = document.getElementById('username').value;
+            await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'bookNow', bil, no_matrik })
+            });
+            fetchBooks();
+        }
+
+        async function approveBooking(bil) {
+            await fetch(APPS_SCRIPT_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'text/plain' },
+                body: JSON.stringify({ action: 'approveBooking', bil })
+            });
+            fetchBookings();
+        }
+
+        function printReport(type) {
+            window.print();
+        }
+    </script>
+</body>
+</html>
